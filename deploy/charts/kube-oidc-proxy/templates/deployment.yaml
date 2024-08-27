@@ -140,6 +140,35 @@ spec:
             mountPath: /etc/oidc/tls
             readOnly: true
           {{- if .Values.extraVolumeMounts }}{{ toYaml .Values.extraVolumeMounts | trim | nindent 10 }}{{ end }}
+      - name: {{ .Values.auditProxyImage.name }}
+        image: "{{ .Values.auditProxyImage.repository }}:{{ .Values.auditProxyImage.tag }}"
+        imagePullPolicy: {{ .Values.auditProxyImage.pullPolicy }}
+        ports:
+        - containerPort: 8082 # only listens to calls from localhost
+        - containerPort: 8083 # externally available
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8083
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        command: ["/app"]
+        env:
+        - name: BNN_K8S_AUDIT_PROXY_SERVICE_NAME
+          value: {{ .Values.auditProxy.serviceName }}
+        {{- if .Values.auditProxy.restapiUrl }}
+        - name: BNN_K8S_AUDIT_PROXY_RESTAPI_URL
+          value: {{ .Values.auditProxy.restapiUrl }}
+        {{ end }}
+        {{- if .Values.auditProxy.refreshToken }}
+        - name: BNN_K8S_AUDIT_PROXY_REFRESH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kube-oidc-proxy.fullname" . }}-config
+              key: audit-proxy.refresh-token
+        {{ end }}
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
       volumes:
         {{ if .Values.oidc.caPEM }}
         - name: kube-oidc-proxy-config
